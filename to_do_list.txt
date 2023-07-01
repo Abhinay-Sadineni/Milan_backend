@@ -1,0 +1,10 @@
+List of things to do in backend
+
+1)Backend token authentication
+
+2)rest api using socket api for displaying scores
+
+3)email notifaction using imdp milan gmail account
+
+4)participants list in events 
+
