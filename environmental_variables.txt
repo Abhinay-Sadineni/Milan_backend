@@ -1,0 +1,7 @@
+Instructions:
+
+1)store the client_id, cliend_secret , refresh token , redirect uri in .env file
+2)
+
+
+
