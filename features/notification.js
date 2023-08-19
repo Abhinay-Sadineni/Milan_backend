@@ -1,5 +1,5 @@
 import schedule from 'node-schedule'
-import sendMail from './features/mailer.js';
+import sendMail from './mailer.js';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import * as url from 'url';
@@ -11,7 +11,7 @@ let events = []
 //get environment variables
 dotenv.config();
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
-dotenv.config({ path: __dirname + './.env' });
+dotenv.config({ path: __dirname + '../.env' });
 
 const auth =new google.auth.GoogleAuth({
     keyFile : "credentials.json",
@@ -103,12 +103,12 @@ const job = schedule.scheduleJob('0 * * * *', async function () {
                 })
             })
 
-      
-                
-
 
 })
 
+
+
+export default job;
 
 
 
