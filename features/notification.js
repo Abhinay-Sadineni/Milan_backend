@@ -13,10 +13,13 @@ dotenv.config();
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 dotenv.config({ path: __dirname + '../.env' });
 
-const auth =new google.auth.GoogleAuth({
-    keyFile : "credentials.json",
-    scopes :"https://www.googleapis.com/auth/spreadsheets"
-  })
+const keyfile = JSON.parse(process.env.google_sheet_credentials);
+
+
+const auth = new google.auth.GoogleAuth({
+  credentials: keyfile,
+  scopes: "https://www.googleapis.com/auth/spreadsheets"
+});
 
 
 //create client instance for auth 

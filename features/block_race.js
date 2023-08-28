@@ -1,10 +1,5 @@
-import { createServer } from "http";
 import { google } from 'googleapis';
-import express from 'express';
 import dotenv from 'dotenv';
-import path from 'path';
-import bodyParser from "body-parser";
-import { Server } from "socket.io";
 import url from 'url';
 //get environment variables
 dotenv.config();
@@ -24,16 +19,13 @@ const auth = new google.auth.GoogleAuth({
 });
 
 
-const startServer = async () => {
+const startServer = async (io) => {
   //create client instance for auth
   const client = await auth.getClient();
   //created instance of google sheets api
   const googlesheets = google.sheets({ version: 'v4', auth: client });
 
-  //create an express app
-  const app = express();
-  app.use(express.json());
-  const httpServer = createServer(app);
+
 
   //declarations and google api instances completed
 
@@ -58,27 +50,23 @@ const startServer = async () => {
 
       score_table = getRows.data.values;
       //convert event array into array of objects
-      score_table = score_table.map((row) => {
-        return {
-            team_name : row[0],
-            sports_score : row[1],
-            culty_score :row[2],
-            tech_score : row[3],
-            total_score : row[4]
-        };
-      });
-
-      return score_table;
+      const header =score_table[0];
+      header[0] = 'Team';
+      let score_table_formatted = [];
+      score_table_formatted = score_table.map((column) => {
+          const temp = {};
+          for(let i=0;i<column.length;i++){
+            temp[header[i]] = column[i];
+          }
+          return temp;        
+        });
+       
+      return score_table_formatted;
     } catch (error) {
       console.error('error', error.message ,"inside get_live_score");
     }
   };
 
-  const io = new Server(httpServer, {
-    cors: {
-      origin: "*",
-    }
-  });
 
   io.on("connection", async (socket) => {
       //print in console when new user connected
@@ -87,8 +75,15 @@ const startServer = async () => {
    
     try {
       //get data from google sheets
-      const range = 'LEADERBOARD!A1:M5';
-      const score_table = await get_live_score(process.env.Live_id, range) || [];
+     //get data from google sheets
+     const data_title =['LEADERBOARD','TECHY','CULTY','SPORTS_BOYS','SPORTS_GIRLS']
+     const range = ['LEADERBOARD!A1:M5','TECHY!A1:M22','CULTY!A1:M22','SPORTS_BOYS!A1:M22','SPORTS_GIRLS!A1:M22'];
+     let score_table ={} ;
+     for (let i = 0; i < range.length; i++) {
+       score_table[data_title[i]] = 
+    await get_live_score(process.env.Live_id, range[i]) || []
+       ;
+   }
 
 
       //send data to client
@@ -106,8 +101,15 @@ const startServer = async () => {
     console.log('update occured', socket.id);
     try {
       //get data from google sheets
-      const range = 'LEADERBOARD!A1:M5';
-      const score_table = await get_live_score(process.env.Live_id, range) || [];
+      const data_title =['LEADERBOARD','TECHY','CULTY','SPORTS_BOYS','SPORTS_GIRLS']
+      const range = ['LEADERBOARD!A1:M5','TECHY!A1:M22','CULTY!A1:M22','SPORTS_BOYS!A1:M22','SPORTS_GIRLS!A1:M22'];
+      let score_table ={} ;
+      for (let i = 2; i < range.length; i++) {
+        score_table[data_title[i]] = {
+            [data_title[i]]: await get_live_score(process.env.Live_id, range[i]) || []
+        };
+    }
+    
 
 
       //send data to client
@@ -123,10 +125,7 @@ const startServer = async () => {
 
     
 
-  httpServer.listen(3000, () => {
-    console.log("Server is running on port 3000");
-  });
+
 };
 
-// Start the server
-startServer();
+export default startServer;
