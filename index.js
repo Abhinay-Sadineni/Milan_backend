@@ -31,13 +31,23 @@ const io = new Server(server, {
     }
 });
 
-const data = [];
+const eventdata =  [{
+    id: "adfasd",
+    sport: "Football",
+    name: "Football Finals",
+    score1: 2,
+    score2: 3,
+    team1: "Charaka",
+    team2: "Bhabha",
+    data: "myran"
+}];
 
 //Socket code goes here
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
-    
+
     socket.on("setup", (data) => {
+        socket.emit("setupdata", eventdata)
         console.log(data);
     })
 
@@ -45,6 +55,18 @@ io.on('connection', (socket) => {
         console.log(data);
     });
 
+    socket.on("update_score", (data) => {
+        const id = data.id;
+        const index = eventdata.findIndex((event) => event.id === id);
+        // eventdata[index]
+        if(data.score1){
+            eventdata[index].score1 = data.score1;
+        }       
+         if(data.score2){
+            eventdata[index].score2 = data.score2;
+        }
+        socket.broadcast.emit("admin_update", data)
+    })
     // Handle socket events here...
 
     socket.on('disconnect', () => {
