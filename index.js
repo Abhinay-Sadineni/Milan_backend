@@ -9,8 +9,17 @@ import jwt from "jsonwebtoken";
 import { Server } from 'socket.io'; import http from "http";
 import dotenv from 'dotenv';
 import pkg from 'pg';
+import url from 'url';
 
-job.schedule();
+
+
+
+
+//get environment variables
+dotenv.config();
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+dotenv.config({ path: __dirname + '.env' });
+
 
 const { Pool } = pkg;
 const pool = new Pool({
@@ -21,6 +30,9 @@ const pool = new Pool({
     port: 5432,
 });
 pool.connect()
+
+//start the job
+job.schedule();
 
 const app = express();
 const server = http.createServer(app)
@@ -81,8 +93,8 @@ app.use(cookieParser());
 passport.use(
     new GoogleStrategy(
         {
-            clientID: process.env.GAUTH_CLIENT_ID,
-            clientSecret: process.env.GAUTH_SECRET,
+            clientID: process.env.CLIENT_ID,
+            clientSecret: process.env.CLIENT_SECRET,
             callbackURL: '/auth/google/callback',
             scope: ['profile', 'email'],
         },
@@ -128,7 +140,7 @@ app.get('/auth/google/callback',
                 if (error) throw error;
                 console.log('New User Created')
             })
-            console.log(req.user)
+            //console.log(req.user)
         }
         if (req.user._json.hd == undefined && req.user.hd !== 'iith.ac.in') {
             res.json({ auth: 'false', message: 'use iith email to continue' })
@@ -139,6 +151,7 @@ app.get('/auth/google/callback',
         }
     }
 );
+
 
 const verifyUser = (req, res, next) => {
     const cookie = req.cookies.authtoken;
@@ -159,12 +172,34 @@ const verifyUser = (req, res, next) => {
 }
 
 app.get('/profile', verifyUser, async (req, res) => {
+    console.log(res)
     res.json({ email: res.locals.email })
 })
 
 app.get('/hello', async (req, res) => {
     res.send("Hello People")
 })
+
+
+
+
+
+//update supporting teams
+app.get('/profile/update', verifyUser, async (req, res) => {
+    const { supportedTeams } = req.body; // Assuming supportedTeams is an array of team names or IDs.
+    const userEmail = res.locals.email;
+    console.log(userEmail)
+    try {
+        // Update the user's profile in the database with the supported teams.
+        const updateQuery = 'UPDATE users SET supported_teams = $1 WHERE email = $2';
+        await pool.query(updateQuery, [supportedTeams, userEmail]);
+        res.json({ success: true, message: 'Profile updated successfully' });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Profile update failed' });
+    }
+});
 
 // app.use('/api/events', require('./events'))
 // module.exports = io

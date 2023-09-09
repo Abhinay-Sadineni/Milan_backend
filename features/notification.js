@@ -62,7 +62,7 @@ const getevents = async (spreadsheetId,range) => {
 
 
 //for every update one hour the events array  
-const job = schedule.scheduleJob('0 * * * *', async function () {
+const job = schedule.scheduleJob('0 * * * *', async function (pool) {
 
     //fetch the events from the sheet and update the events array
     const range = 'Sheet1!A2:C';
@@ -82,14 +82,30 @@ const job = schedule.scheduleJob('0 * * * *', async function () {
           }
 
           )
-          console.log('number of events read and filtered: ',events.length)
+          
             
           //send mail to all the supporting teams of the each event with the event details and at 15 minutes before the event
-          //also include teams which are supported in the event
            events.forEach((event) => {
-                const mailDetails = {
+                    
+            let recipients = new Set(); // Use a Set to store unique email addresses
+
+            event.supporting_teams.forEach((team) => {
+                const email_query = 'SELECT email FROM ' + team + '_supporters';
+                const data = pool.query(email_query);
+                const emails = data.rows.map((row) => row.email);
+                
+                // Add the retrieved emails to the Set
+                emails.forEach((email) => {
+                    recipients.add(email);
+                });
+            });
+            
+            // Convert the Set back to an array if needed
+            recipients = Array.from(recipients);
+               
+            const mailDetails = {
                     from: 'abhinay.sadineni@gmail.com',
-                    to: 'cs21btech11055@iith.ac.in',
+                    to: recipients.join(', '),
                     subject: 'Event Reminder',
                     text: `Event ${event.name} is scheduled at ${event.start_time}`,
                     html: `<h1>Event ${event.name} is scheduled at ${event.start_time} </h1>`
