@@ -3,6 +3,7 @@ import sendMail from './mailer.js';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import * as url from 'url';
+import pkg from 'pg';
 
 
 //intialize an events array to store the events from the sheet
@@ -46,7 +47,7 @@ const getevents = async (spreadsheetId,range) => {
          events = events.map((event) => {
                 return {
                     name: event[0],
-                    supporting_teams:event[1].split(','),
+                    supporting_teams: event[1].toLowerCase().split(','),
                     start_time: new Date(event[2])
                 }
         })
@@ -59,72 +60,86 @@ const getevents = async (spreadsheetId,range) => {
 
 }
 
+const { Pool } = pkg;
+const pool = new Pool({
+    user: 'postgres',
+    password: 'root',
+    host: 'localhost',
+    database: 'milan',
+    port: 5432,
+});
+pool.connect()
 
 
-//for every update one hour the events array  
-const job = schedule.scheduleJob('0 * * * *', async function (pool) {
 
-    //fetch the events from the sheet and update the events array
+// ...
+
+const job = schedule.scheduleJob('*/15 * * * *', async function () {
     const range = 'Sheet1!A2:C';
     const spreadsheetId = process.env.SPREADSHEET_ID;
-    await getevents(spreadsheetId,range)
 
-    events.sort((a,b) => a.start_time - b.start_time)
+    await getevents(spreadsheetId, range);
 
-          //write the remaining code here
-          const now = new Date();
-          const minTime = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes from now
-          const maxTime = new Date(now.getTime() + 75 * 60 * 1000); // 1 hour from now
+    events.sort((a, b) => a.start_time - b.start_time);
 
-          //get tevents which are within onw hour from now
-          events=events.filter((event) => {
-            return event.start_time > minTime && event.start_time <= maxTime;
-          }
+    const now = new Date();
+    const minTime = new Date(now.getTime() + 15 * 60 * 1000);
+    const maxTime = new Date(now.getTime() + 29 * 60 * 1000);
 
-          )
-          
-            
-          //send mail to all the supporting teams of the each event with the event details and at 15 minutes before the event
-           events.forEach((event) => {
-                    
-            let recipients = new Set(); // Use a Set to store unique email addresses
+    events = events.filter((event) => {
+        return event.start_time > minTime && event.start_time <= maxTime;
+    });
 
-            event.supporting_teams.forEach((team) => {
-                const email_query = 'SELECT email FROM ' + team + '_supporters';
-                const data = pool.query(email_query);
-                const emails = data.rows.map((row) => row.email);
-                
-                // Add the retrieved emails to the Set
-                emails.forEach((email) => {
-                    recipients.add(email);
-                });
-            });
-            
-            // Convert the Set back to an array if needed
-            recipients = Array.from(recipients);
-               
+    console.log(events);
+
+    const emailPromises = events.map(async (event) => {
+        let recipientsArray = [];
+        // Create a parameterized query
+        const queryText = `
+            SELECT DISTINCT u.email
+            FROM users u
+            JOIN prefered_event pe ON u.user_id = pe.user_id
+            JOIN events e ON pe.prefered_event_id = e.event_id
+            JOIN supporting_teams st ON u.user_id = st.user_id
+            WHERE e.event_name = $1
+            AND st.supporting_team = ANY($2::text[])
+        `;
+        
+        // Execute the query
+        pool.query(queryText, [event, teamsParticipating], (error, result) => {
+            if (error) {
+                console.error('Error executing query:', error);
+            } else {
+                const emails = result.rows.map((row) => row.email);
+                recipientsArray.push(...emails);
+            }
+        });
+        
+
+
+        if (recipientsArray.length > 0) {
+            console.log(recipientsArray);
+
             const mailDetails = {
-                    from: 'abhinay.sadineni@gmail.com',
-                    to: recipients.join(', '),
-                    subject: 'Event Reminder',
-                    text: `Event ${event.name} is scheduled at ${event.start_time}`,
-                    html: `<h1>Event ${event.name} is scheduled at ${event.start_time} </h1>`
-                    
-                }
-                //schedule the mail to be sent at the time of event befor 15 minutes
-                const send_time = event.start_time;
-                send_time.setMinutes(event.start_time.getMinutes() - 15)
+                from: 'abhinay.sadineni@gmail.com',
+                to: recipientsArray.join(', '),
+                subject: 'Event Reminder',
+                text: `Event ${event.name} is scheduled at ${event.start_time}`,
+                html: `<h1>Event ${event.name} is scheduled at ${event.start_time} </h1>`
+            };
 
-                const job=  schedule.scheduleJob(send_time,  async function () {
-                        const result = await sendMail(mailDetails, oAuth2Client)
-                        console.log('email sent:',result.messageId)
-                        
-                })
-            })
+            const send_time = event.start_time;
+            send_time.setMinutes(event.start_time.getMinutes() - 15);
 
+            return schedule.scheduleJob(send_time, async function () {
+                const result = await sendMail(mailDetails, oAuth2Client);
+                console.log('email sent:', result.messageId);
+            });
+        }
+    });
 
-})
-
+    await Promise.all(emailPromises);
+});
 
 
 export default job;
