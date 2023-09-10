@@ -56,8 +56,6 @@ const getevents = async (spreadsheetId,range) => {
     catch (error) {
         console.error('error',error.message)
     }
-    
-
 }
 
 const { Pool } = pkg;
