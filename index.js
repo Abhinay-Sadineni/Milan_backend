@@ -39,16 +39,49 @@ const io = new Server(server, {
     }
 });
 
-const eventdata =  [{
-    id: "adfasd",
-    sport: "Football",
-    name: "Football Finals",
-    score1: 2,
-    score2: 3,
-    team1: "Charaka",
-    team2: "Bhabha",
-    data: "myran"
-}];
+let eventdata = [
+    {
+        id: 'adfasd',
+        sport: 'Football',
+        name: 'Football Finals',
+        score1: 2,
+        score2: 3,
+        team1: 'Charaka',
+        team2: 'Bhabha',
+        data: 'myran'
+    },
+    {
+        sport: 'Football',
+        event: 'Football',
+        id: 'mvrzVIb7f2',
+        team1: 'Varahamira',
+        team2: 'Charaka',
+        score1: 0,
+        score2: 0
+    },
+    {
+        sport: 'Basketball',
+        event: 'Basketball',
+        id: 'InKz8TOSSx',
+        team1: 'Varahamira',
+        team2: 'Charaka',
+        score1: 0,
+        score2: 0
+    },
+    {
+        sport: 'Cricket',
+        event: 'Cricket',
+        id: '6X69TiRFvy',
+        team1: 'Varahamira',
+        team2: 'Charaka',
+        score1: 0,
+        score2: 0,
+        wicket1: 0,
+        wicket2: 0,
+        over1: 0,
+        over2: 0
+    },
+]
 
 //Socket code goes here
 io.on('connection', (socket) => {
@@ -60,32 +93,72 @@ io.on('connection', (socket) => {
     })
 
     socket.on("recieve_data", (data) => {
-        console.log(data);
+        let newdata = {}
+        if (data.sport == "Football" || data.sport == "Basketball" || data.sport == "Hockey" || data.sport == "Tennis") {
+            console.log("nbew data is football")
+            newdata = {
+                ...data,
+                score1: 0,
+                score2: 0
+            }
+        }
+        else if (data.sport == "Cricket") {
+            newdata = {
+                ...data,
+                score1: 0,
+                score2: 0,
+                wicket1: 0,
+                wicket2: 0,
+                over1: 0,
+                over2: 0,
+            }
+        }
+        console.log("NEW DATA IS", newdata)
+        eventdata = eventdata.concat(newdata);
+        console.log("NEW EVENTDATA IS ", eventdata)
+        socket.broadcast.emit("new_event_broadcast", newdata)
     });
 
     socket.on("update_score", (data) => {
         const id = data.id;
-        const index = eventdata.findIndex((event) => event.id === id);
-        // eventdata[index]
-        if(data.score1){
-            eventdata[index].score1 = data.score1;
-        }       
-         if(data.score2){
-            eventdata[index].score2 = data.score2;
+        try {
+            const index = eventdata.findIndex((event) => event.id === id);
+            // eventdata[index]
+            if (data.score1) {
+                eventdata[index].score1 = data.score1;
+            }
+            if (data.score2) {
+                eventdata[index].score2 = data.score2;
+            }
+            if (data.over1) {
+                eventdata[index].over1 = data.over1;
+            }
+            if (data.over2) {
+                eventdata[index].over2 = data.over2;
+            }
+            if (data.wicket1) {
+                eventdata[index].wicket1 = data.wicket1;
+            }
+            if (data.wicket2) {
+                eventdata[index].wicket2 = data.wicket2;
+            }
+
+            socket.broadcast.emit("admin_update", data)
+        } catch (e) {
+            socket.broadcast.emit("admin_update", { message: "Event not found" })
+
         }
-        socket.broadcast.emit("admin_update", data)
     })
-    // Handle socket events here...
 
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
     });
-
 });
+
 const corsOptions = {
     origin: 'http://localhost:5173',
     credentials: true, // Allow credentials (cookies, HTTP authentication)
-  };
+};
 app.use(express.json())
 app.use(cors(corsOptions))
 app.use(cookieParser());
@@ -193,16 +266,16 @@ app.get('/profile', verifyUser, async (req, res) => {
         const event_name = event.prefered_event_name;
         events_array.push(event_name);
     }
-   
+
     const user_object = {
         user_id: user.user_id,
         email: user.email,
         display_name: user.display_name,
-        avatar_url: user.avatar_url,    
+        avatar_url: user.avatar_url,
         supportedTeams: teams_array,
         preferedEvents: events_array
     }
-    console.log(user_object,"user fetched");
+    console.log(user_object, "user fetched");
     res.json({ success: true, user: user_object });
 })
 
@@ -216,74 +289,74 @@ app.get('/profile/update', verifyUser, async (req, res) => {
     const { supportedTeams, preferedEvents } = req.body; // Assuming supportedTeams and preferedEvents are arrays of team names or event IDs.
 
     const userEmail = res.locals.email;
-    
+
     try {
         // Get the user_id based on the user's email from the users table.
         const getUserIdQuery = 'SELECT user_id FROM users WHERE email = $1';
         const getUserIdResult = await pool.query(getUserIdQuery, [userEmail]);
-    
+
         if (getUserIdResult.rows.length === 0) {
             // Handle the case where the user with the given email does not exist.
             res.status(404).json({ success: false, message: 'User not found' });
             return;
         }
-    
+
         const userId = getUserIdResult.rows[0].user_id;
-    
+
         // Insert supported teams for the user into the supporting_teams table.
         for (const team of supportedTeams) {
             try {
                 const team_id_query = 'SELECT team_id FROM teams WHERE team_name = $1';
                 const team_id_result = await pool.query(team_id_query, [team]);
-        
+
                 if (team_id_result.rows.length === 0) {
                     console.error(`Team not found in the database: ${team}`);
                     continue; // Skip to the next iteration
                 }
-        
+
                 const team_id = team_id_result.rows[0].team_id;
                 console.log(`Team: ${team}, Team ID: ${team_id}`);
-        
+
                 const insertSupportedTeamQuery = 'INSERT INTO supporting_teams (user_id, email, supporting_team, supporting_team_name) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id, email, supporting_team) DO NOTHING';
-        
+
                 // Now, insert the data with the retrieved team_id
                 await pool.query(insertSupportedTeamQuery, [userId, userEmail, team_id, team]);
             } catch (error) {
                 console.error('Error:', error);
             }
         }
-        
-    
+
+
         // Insert preferred events for the user into the prefered_event table.
         for (const event of preferedEvents) {
             try {
                 const event_id_query = 'SELECT event_id FROM events WHERE event_name = $1';
                 const event_id_result = await pool.query(event_id_query, [event]);
-        
+
                 if (event_id_result.rows.length === 0) {
                     console.error(`Event not found in the database: ${event}`);
                     continue; // Skip to the next iteration
                 }
-        
+
                 const event_id = event_id_result.rows[0].event_id;
                 console.log(`Event: ${event}, Event ID: ${event_id}`);
-        
+
                 const insertPreferredEventQuery = 'INSERT INTO prefered_event (email, user_id, prefered_event_id, prefered_event_name) VALUES ($1, $2, $3, $4) ON CONFLICT (email, user_id, prefered_event_id) DO NOTHING';
-        
+
                 // Now, insert the data with the retrieved event_id
                 await pool.query(insertPreferredEventQuery, [userEmail, userId, event_id, event]);
             } catch (error) {
                 console.error('Error:', error);
             }
         }
-        
-    
+
+
         res.send({ success: true, message: 'Profile updated successfully' });
-        
+
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Profile update failed' });
-    }    
+    }
 
 });
 
