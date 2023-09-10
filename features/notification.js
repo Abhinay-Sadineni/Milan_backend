@@ -4,7 +4,7 @@ import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import * as url from 'url';
 import pkg from 'pg';
-
+import pgPromise from 'pg-promise';
 
 //intialize an events array to store the events from the sheet
 let events = []
@@ -46,9 +46,9 @@ const getevents = async (spreadsheetId,range) => {
          //convert event array into array of objects
          events = events.map((event) => {
                 return {
-                    name: event[0],
-                    supporting_teams: event[1].toLowerCase().split(','),
-                    start_time: new Date(event[2])
+                name: event[0],
+                teamsParticipating: event[1].toLowerCase().split(',').map(team => team.trim()),
+                start_time: new Date(event[2])
                 }
         })
 
@@ -62,11 +62,10 @@ const getevents = async (spreadsheetId,range) => {
 
 const { Pool } = pkg;
 const pool = new Pool({
-    user: 'postgres',
-    password: 'root',
-    host: 'localhost',
-    database: 'milan',
-    port: 5432,
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 pool.connect()
 
@@ -75,6 +74,7 @@ pool.connect()
 // ...
 
 const job = schedule.scheduleJob('*/15 * * * *', async function () {
+    console.log('running a task every 15 minutes');
     const range = 'Sheet1!A2:C';
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
@@ -96,21 +96,24 @@ const job = schedule.scheduleJob('*/15 * * * *', async function () {
         let recipientsArray = [];
         // Create a parameterized query
         const queryText = `
-            SELECT DISTINCT u.email
-            FROM users u
-            JOIN prefered_event pe ON u.user_id = pe.user_id
-            JOIN events e ON pe.prefered_event_id = e.event_id
-            JOIN supporting_teams st ON u.user_id = st.user_id
-            WHERE e.event_name = $1
-            AND st.supporting_team_name = ANY($2::text[])
+        SELECT DISTINCT u.email
+        FROM users u
+        JOIN prefered_event pe ON u.user_id = pe.user_id
+        JOIN events e ON pe.prefered_event_id = e.event_id
+        JOIN supporting_teams st ON u.user_id = st.user_id
+        WHERE e.event_name ILIKE $1
+        AND st.supporting_team_name ILIKE ANY($2::text[]);
         `;
-        
+        const queryParams = [event.name, event.teamsParticipating];
+        const completeQuery = pgPromise.as.format(queryText, queryParams);
+        console.log(completeQuery);
         // Execute the query
-        pool.query(queryText, [event, teamsParticipating], (error, result) => {
+        pool.query(completeQuery, (error, result) => {
             if (error) {
                 console.error('Error executing query:', error);
             } else {
                 const emails = result.rows.map((row) => row.email);
+                console.log(emails);
                 recipientsArray.push(...emails);
             }
         });

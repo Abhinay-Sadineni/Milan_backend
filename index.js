@@ -10,7 +10,6 @@ import { Server } from 'socket.io'; import http from "http";
 import dotenv from 'dotenv';
 import pkg from 'pg';
 import url from 'url';
-import e from 'express';
 
 //get environment variables
 dotenv.config();
@@ -29,7 +28,7 @@ const pool = new Pool({
 pool.connect()
 
 //start the job
-//job.schedule();
+job.schedule();
 
 const app = express();
 const server = http.createServer(app)
@@ -83,9 +82,12 @@ io.on('connection', (socket) => {
     });
 
 });
-
+const corsOptions = {
+    origin: 'http://localhost:5173',
+    credentials: true, // Allow credentials (cookies, HTTP authentication)
+  };
 app.use(express.json())
-app.use(cors({origin: '*'}))
+app.use(cors(corsOptions))
 app.use(cookieParser());
 
 passport.use(
@@ -144,13 +146,13 @@ app.get('/auth/google/callback',
             res.json({ auth: 'false', message: 'use iith email to continue' })
         } else {
             const jwttoken = jwt.sign(req.user.emails[0].value, 'milan_backend_secret')
-            console.log(res)
+            //console.log(res)
             res.cookie('authtoken', jwttoken, { maxAge: 432000, httpOnly: true });
-            res.json({ auth: 'true', message: 'logged in' })
-
+            res.redirect('http://localhost:5173/profile')
         }
     }
 );
+
 
 
 const verifyUser = (req, res, next) => {
@@ -214,7 +216,6 @@ app.get('/profile/update', verifyUser, async (req, res) => {
     const { supportedTeams, preferedEvents } = req.body; // Assuming supportedTeams and preferedEvents are arrays of team names or event IDs.
 
     const userEmail = res.locals.email;
-    console.log(userEmail);
     
     try {
         // Get the user_id based on the user's email from the users table.
@@ -277,7 +278,7 @@ app.get('/profile/update', verifyUser, async (req, res) => {
         }
         
     
-        res.json({ success: true, message: 'Profile updated successfully' });
+        res.send({ success: true, message: 'Profile updated successfully' });
         
     } catch (error) {
         console.error(error);
