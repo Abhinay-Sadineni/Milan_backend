@@ -20,11 +20,11 @@ dotenv.config({ path: __dirname + '.env' });
 
 const { Pool } = pkg;
 const pool = new Pool({
-    user: 'postgres',
-    password: 'root',
-    host: 'localhost',
-    database: 'milan',
-    port: 5432,
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+
 });
 pool.connect()
 
@@ -81,6 +81,7 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
     });
+
 });
 
 app.use(express.json())
@@ -143,6 +144,7 @@ app.get('/auth/google/callback',
             res.json({ auth: 'false', message: 'use iith email to continue' })
         } else {
             const jwttoken = jwt.sign(req.user.emails[0].value, 'milan_backend_secret')
+            console.log(res)
             res.cookie('authtoken', jwttoken, { maxAge: 432000, httpOnly: true });
             res.json({ auth: 'true', message: 'logged in' })
 
