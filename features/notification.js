@@ -102,7 +102,7 @@ const job = schedule.scheduleJob('*/15 * * * *', async function () {
             JOIN events e ON pe.prefered_event_id = e.event_id
             JOIN supporting_teams st ON u.user_id = st.user_id
             WHERE e.event_name = $1
-            AND st.supporting_team = ANY($2::text[])
+            AND st.supporting_team_name = ANY($2::text[])
         `;
         
         // Execute the query
