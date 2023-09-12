@@ -70,8 +70,8 @@ pool.connect()
 
 
 // ...
-
-const job = schedule.scheduleJob('*/15 * * * *', async function () {
+const interval = 3
+const job = schedule.scheduleJob(`*/${interval} * * * *`, async function () {
     console.log('running a task every 15 minutes');
     const range = 'Sheet1!A2:C';
     const spreadsheetId = process.env.SPREADSHEET_ID;
@@ -81,8 +81,8 @@ const job = schedule.scheduleJob('*/15 * * * *', async function () {
     events.sort((a, b) => a.start_time - b.start_time);
 
     const now = new Date();
-    const minTime = new Date(now.getTime() + 15 * 60 * 1000);
-    const maxTime = new Date(now.getTime() + 29 * 60 * 1000);
+    const minTime = new Date(now.getTime() + interval * 60 * 1000);
+    const maxTime = new Date(now.getTime() + (2 * interval) * 60 * 1000 - 1);
 
     events = events.filter((event) => {
         return event.start_time > minTime && event.start_time <= maxTime;
@@ -91,7 +91,6 @@ const job = schedule.scheduleJob('*/15 * * * *', async function () {
     console.log(events);
 
     const emailPromises = events.map(async (event) => {
-        let recipientsArray = [];
         // Create a parameterized query
         const queryText = `
         SELECT DISTINCT u.email
@@ -104,38 +103,35 @@ const job = schedule.scheduleJob('*/15 * * * *', async function () {
         `;
         const queryParams = [event.name, event.teamsParticipating];
         const completeQuery = pgPromise.as.format(queryText, queryParams);
-        console.log(completeQuery);
-        // Execute the query
-        pool.query(completeQuery, (error, result) => {
-            if (error) {
-                console.error('Error executing query:', error);
-            } else {
-                const emails = result.rows.map((row) => row.email);
-                console.log(emails);
-                recipientsArray.push(...emails);
+        let recipientsArray = [];
+
+        try {
+            const result = await pool.query(completeQuery);
+            const emails = result.rows.map((row) => row.email);
+            recipientsArray.push(...emails);
+            console.log('recipients: ', recipientsArray);
+
+            if (recipientsArray.length > 0) {
+                const mailDetails = {
+                    from: 'abhinay.sadineni@gmail.com',
+                    to: recipientsArray.join(', '),
+                    subject: 'Event Reminder',
+                    text: `Event ${event.name} is scheduled at ${event.start_time}`,
+                    html: `<h1>Event ${event.name} is scheduled at ${event.start_time} </h1>`
+                };
+
+                console.log(mailDetails);
+
+                const send_time = event.start_time;
+                send_time.setMinutes(event.start_time.getMinutes() - interval);
+
+                return schedule.scheduleJob(send_time, async function () {
+                    const result = await sendMail(mailDetails, oAuth2Client);
+                    console.log('email sent:', result.messageId);
+                });
             }
-        });
-        
-
-
-        if (recipientsArray.length > 0) {
-            console.log(recipientsArray);
-
-            const mailDetails = {
-                from: 'abhinay.sadineni@gmail.com',
-                to: recipientsArray.join(', '),
-                subject: 'Event Reminder',
-                text: `Event ${event.name} is scheduled at ${event.start_time}`,
-                html: `<h1>Event ${event.name} is scheduled at ${event.start_time} </h1>`
-            };
-
-            const send_time = event.start_time;
-            send_time.setMinutes(event.start_time.getMinutes() - 15);
-
-            return schedule.scheduleJob(send_time, async function () {
-                const result = await sendMail(mailDetails, oAuth2Client);
-                console.log('email sent:', result.messageId);
-            });
+        } catch (error) {
+            console.error('Error executing query:', error);
         }
     });
 

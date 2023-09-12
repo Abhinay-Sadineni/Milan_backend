@@ -67,6 +67,24 @@ const removeMemberFromGroup = async (email, team) => {
 
 }
 
-addMemberToGroup("cs21btech11055@iit.ac.in","charaka")
+const getListofGroups = async () => {
+    try {
+        //create client instance for auth
+        const client = await auth.getClient();
+        //created instance of google admin api
+        const googleadmin = google.admin({ version: 'directory_v1', auth: client });
+        
+        const ans = await googleadmin.groups.list({
+            
+        })   
+        
+        
+        console.log(ans);
+    }
+    catch (error) {
+        console.error('error', error.message, "inside getListofGroups");
+    }
 
-export default {addMemberToGroup,removeMemberFromGroup}
+}
+
+export default {addMemberToGroup,removeMemberFromGroup,getListofGroups}
