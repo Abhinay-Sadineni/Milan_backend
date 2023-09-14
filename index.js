@@ -246,6 +246,8 @@ const verifyUser = (req, res, next) => {
     }
 }
 
+
+
 app.get('/profile', verifyUser, async (req, res) => {
     const getUserQuery = 'SELECT * FROM users WHERE email = $1';
     const getUserResult = await pool.query(getUserQuery, [res.locals.email]);
@@ -276,7 +278,7 @@ app.get('/profile', verifyUser, async (req, res) => {
         preferedEvents: events_array
     }
     console.log("user fetched");
-    res.json({ success: true, user: user_object });
+    res.json({ auth: true, user: user_object });
 })
 
 app.get('/hello', async (req, res) => {
@@ -285,6 +287,7 @@ app.get('/hello', async (req, res) => {
 
 
 //update supporting teams
+
 app.post('/profile/update', verifyUser, async (req, res) => {
     console.log(req.body)
     const { supportedTeams, events } = req.body; // Assuming supportedTeams and preferedEvents are arrays of team names or event IDs.
